@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
     "@google-cloud/storage": "^7.18.0",
     "@supabase/supabase-js": "^2.90.1",
     "@types/mongoose": "^5.11.96",

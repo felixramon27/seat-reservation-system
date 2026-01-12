@@ -1,9 +1,15 @@
 import 'dotenv/config'
 import Fastify from 'fastify'
+import cors from '@fastify/cors'
 import seatRoutes from './routes/seats'
 import svgRoutes from './routes/svg'
 
 const fastify = Fastify({ logger: true })
+
+// Registrar CORS
+fastify.register(cors, {
+  origin: true // Permitir todas las origines para desarrollo
+})
 
 // Registrar rutas
 fastify.register(seatRoutes)

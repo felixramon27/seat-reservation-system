@@ -18,9 +18,13 @@ export const reserveSeat = async (seatId: string): Promise<Seat> => {
   return response.json()
 }
 
-// Para inicializar (solo desarrollo)
-export const initSeats = async () => {
-  const response = await fetch(`${API_BASE}/seats/init`, { method: 'POST' })
+export const releaseSeat = async (seatId: string): Promise<Seat> => {
+  const response = await fetch(`${API_BASE}/seats/release`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seatId })
+  })
+  if (!response.ok) throw new Error('Failed to release seat')
   return response.json()
 }
 

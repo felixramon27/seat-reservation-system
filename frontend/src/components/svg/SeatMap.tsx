@@ -6,7 +6,9 @@ import { Seat } from "@/types/seat";
 type Props = {
   seats: Seat[];
   onSelect: (id: string) => void;
-  svgUrl?: string; // Nueva prop para URL del SVG
+  mode?: 'client' | 'admin'; // Nueva prop para modo
+  selectedSeats?: string[]; // Nueva prop para asientos seleccionados en modo cliente
+  svgUrl?: string;
 };
 
 const getDefaultSVG = () => `
@@ -31,9 +33,9 @@ const getDefaultSVG = () => `
       <rect id="seat-A1" class="asiento" x="100" y="160" width="50" height="50" rx="8" />
       <rect id="seat-A2" class="asiento" x="170" y="160" width="50" height="50" rx="8" />
       <rect id="seat-A3" class="asiento" x="240" y="160" width="50" height="50" rx="8" />
-      <text x="125" y="190" font-family="Arial" font-size="12" text-anchor="middle">A1</text>
-      <text x="195" y="190" font-family="Arial" font-size="12" text-anchor="middle">A2</text>
-      <text x="265" y="190" font-family="Arial" font-size="12" text-anchor="middle">A3</text>
+      <text id="text-A1" x="125" y="190" font-family="Arial" font-size="12" text-anchor="middle">A1</text>
+      <text id="text-A2" x="195" y="190" font-family="Arial" font-size="12" text-anchor="middle">A2</text>
+      <text id="text-A3" x="265" y="190" font-family="Arial" font-size="12" text-anchor="middle">A3</text>
     </g>
 
     <!-- ETAPA 2: SECCIÓN GENERAL -->
@@ -43,15 +45,15 @@ const getDefaultSVG = () => `
       <rect id="seat-B2" class="asiento" x="170" y="330" width="50" height="50" rx="8" />
       <rect id="seat-B3" class="asiento" x="240" y="330" width="50" height="50" rx="8" />
       <rect id="seat-B4" class="asiento" x="310" y="330" width="50" height="50" rx="8" />
-      <text x="125" y="360" font-family="Arial" font-size="12" text-anchor="middle">B1</text>
-      <text x="195" y="360" font-family="Arial" font-size="12" text-anchor="middle">B2</text>
-      <text x="265" y="360" font-family="Arial" font-size="12" text-anchor="middle">B3</text>
-      <text x="335" y="360" font-family="Arial" font-size="12" text-anchor="middle">B4</text>
+      <text id="text-B1" x="125" y="360" font-family="Arial" font-size="12" text-anchor="middle">B1</text>
+      <text id="text-B2" x="195" y="360" font-family="Arial" font-size="12" text-anchor="middle">B2</text>
+      <text id="text-B3" x="265" y="360" font-family="Arial" font-size="12" text-anchor="middle">B3</text>
+      <text id="text-B4" x="335" y="360" font-family="Arial" font-size="12" text-anchor="middle">B4</text>
     </g>
   </svg>
 `;
 
-export default function SeatMap({ seats, onSelect, svgUrl }: Props) {
+export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeats = [], svgUrl }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [fetchedSvg, setFetchedSvg] = useState<string>('');
 
@@ -80,12 +82,14 @@ export default function SeatMap({ seats, onSelect, svgUrl }: Props) {
       if (!el) return;
 
       // 🎨 COLOR (use setAttribute to support different SVG element types)
-      const color =
-        seat.status === "available"
-          ? "#4ade80"
-          : seat.status === "selected"
-          ? "#facc15"
-          : "#f87171";
+      let color = "#f87171"; // default red for reserved
+      if (seat.status === "available") {
+        if (mode === 'client' && selectedSeats.includes(seat.id)) {
+          color = "#facc15"; // yellow for selected in client
+        } else {
+          color = "#4ade80"; // green for available
+        }
+      }
 
       try {
         el.setAttribute('fill', color);
@@ -95,17 +99,14 @@ export default function SeatMap({ seats, onSelect, svgUrl }: Props) {
       }
 
       // 🖱️ CURSOR
-      el.style.cursor = seat.status === "reserved" ? "not-allowed" : "pointer";
+      const isClickable = mode === 'admin' || seat.status === 'available';
+      el.style.cursor = isClickable ? "pointer" : "not-allowed";
 
       // 🧠 CLICK
       // replace any existing handler so selection stays in sync
-      el.onclick = () => {
-        if (seat.status !== "reserved") {
-          onSelect(seat.id);
-        }
-      };
+      el.onclick = isClickable ? () => onSelect(seat.id) : null;
     });
-  }, [seats, onSelect, svgContent]);
+  }, [seats, onSelect, mode, selectedSeats, svgContent]);
 
   return (
     <div

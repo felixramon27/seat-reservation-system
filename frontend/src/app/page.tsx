@@ -4,14 +4,68 @@ import SeatMap from '@/components/svg/SeatMap'
 import { useSeatSelection } from '@/hooks/useSeatSelection'
 
 export default function Home() {
-  const { seats, selectSeat, loading } = useSeatSelection()
+  const { seats, selectSeat, mode, setMode, selectedSeats, confirmSelection, loading } = useSeatSelection()
 
-  if (loading) return <div>Loading...</div>
+  if (loading) return <div>Cargando...</div>
 
   return (
-    <main style={{ padding: 40 }}>
-      <h1>Seat Reservation</h1>
-      <SeatMap seats={seats} onSelect={selectSeat} />
+    <main style={{ padding: 40, fontFamily: 'Arial, sans-serif' }}>
+      <h1>Reserva de Asientos</h1>
+      <div style={{ marginBottom: 20 }}>
+        <button 
+          onClick={() => setMode('client')} 
+          disabled={mode === 'client'}
+          style={{
+            padding: '10px 20px',
+            marginRight: '10px',
+            backgroundColor: mode === 'client' ? '#007bff' : '#6c757d',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: mode === 'client' ? 'not-allowed' : 'pointer'
+          }}
+        >
+          Modo Cliente
+        </button>
+        <button 
+          onClick={() => setMode('admin')} 
+          disabled={mode === 'admin'}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: mode === 'admin' ? '#dc3545' : '#6c757d',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: mode === 'admin' ? 'not-allowed' : 'pointer'
+          }}
+        >
+          Modo Administrador
+        </button>
+      </div>
+      <p>
+        {mode === 'client'
+          ? 'Haz clic en asientos disponibles para seleccionarlos. Los asientos reservados no son seleccionables.'
+          : 'Haz clic en asientos disponibles para reservarlos, haz clic en asientos reservados para liberarlos.'}
+      </p>
+      {selectedSeats.length > 0 && mode === 'client' && (
+        <div style={{ marginBottom: 20, padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+          <p>Asientos seleccionados: {selectedSeats.join(', ')}</p>
+          <button 
+            onClick={confirmSelection}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer'
+            }}
+          >
+            Confirmar Reserva
+          </button>
+        </div>
+      )}
+      <SeatMap seats={seats} onSelect={selectSeat} mode={mode} selectedSeats={selectedSeats} />
     </main>
   )
 }
