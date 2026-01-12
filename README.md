@@ -66,7 +66,7 @@ npm install
 Crear archivo `.env` en `backend/`:
 
 ```env
-MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/seat-reservation?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://usuario:password
 SUPABASE_URL=https://tu-proyecto.supabase.co
 SUPABASE_ANON_KEY=tu-clave-anonima
 PORT=3001
