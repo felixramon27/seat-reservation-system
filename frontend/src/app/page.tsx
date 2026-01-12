@@ -2,10 +2,11 @@
 
 import SeatMap from '@/components/svg/SeatMap'
 import { useSeatSelection } from '@/hooks/useSeatSelection'
-import { getMockSeats } from '@/services/seat.service'
 
 export default function Home() {
-  const { seats, selectSeat } = useSeatSelection(getMockSeats())
+  const { seats, selectSeat, loading } = useSeatSelection()
+
+  if (loading) return <div>Loading...</div>
 
   return (
     <main style={{ padding: 40 }}>
