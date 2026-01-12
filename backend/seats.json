@@ -1,15 +1,15 @@
 [
   {
     "id": "seat-A1",
-    "status": "available"
+    "status": "reserved"
   },
   {
     "id": "seat-A2",
-    "status": "available"
+    "status": "reserved"
   },
   {
     "id": "seat-A3",
-    "status": "available"
+    "status": "reserved"
   },
   {
     "id": "seat-B1",

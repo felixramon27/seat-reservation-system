@@ -48,7 +48,7 @@ export default function Home() {
           : 'Haz clic en asientos disponibles para reservarlos, haz clic en asientos reservados para liberarlos.'}
       </p>
       {selectedSeats.length > 0 && mode === 'client' && (
-        <div style={{ marginBottom: 20, padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+        <div style={{ marginBottom: 20, padding: '10px', borderRadius: '5px' }}>
           <p>Asientos seleccionados: {selectedSeats.join(', ')}</p>
           <button 
             onClick={confirmSelection}
