@@ -52,7 +52,7 @@ export default function SvgSelector({ onSelectSvg, selectedSvg, isAdmin }: Props
         })
       })
       let body = null
-      try { body = await response.json() } catch (e) { body = null }
+      try { body = await response.json() } catch { body = null }
       if (!response.ok) {
         console.error('Upload failed:', response.status, body)
         const msg = body?.error || body?.details || `HTTP ${response.status}`
@@ -106,8 +106,8 @@ export default function SvgSelector({ onSelectSvg, selectedSvg, isAdmin }: Props
   const handleCancelDelete = () => setDeleteTarget(null)
 
   return (
-    <div style={{ marginBottom: 20, padding: 20, border: '1px solid #ccc', borderRadius: 8 }}>
-      <h3 style={{ marginTop: 0 }}>Seleccionar o Subir SVG del Mapa de Asientos</h3>
+    <div style={{ marginBottom: 20, padding: 20, border: '1px solid #ccc', borderRadius: 8, backgroundColor: '#f0f0f0' }}>
+      <h3 style={{ marginTop: 0, color: '#333' }}>Seleccionar o Subir SVG del Mapa de Asientos</h3>
 
       {/* Subir nuevo SVG - área grande y accesible */}
       <div style={{ marginBottom: 16 }}>
@@ -120,7 +120,7 @@ export default function SvgSelector({ onSelectSvg, selectedSvg, isAdmin }: Props
             borderRadius: 8,
             textAlign: 'center',
             cursor: 'pointer',
-            backgroundColor: file ? '#f8fafc' : 'transparent'
+            backgroundColor: file ? '#e0e0e0' : 'transparent'
           }}
         >
           <input
@@ -132,17 +132,17 @@ export default function SvgSelector({ onSelectSvg, selectedSvg, isAdmin }: Props
           />
           {file ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <strong>{file.name}</strong>
+              <strong style={{ color: '#333' }}>{file.name}</strong>
               <button
                 onClick={() => setFile(null)}
-                style={{ padding: '4px 8px', borderRadius: 4, border: 'none', cursor: 'pointer' }}
+                style={{ padding: '4px 8px', borderRadius: 4, border: 'none', cursor: 'pointer', backgroundColor: '#007bff', color: 'white' }}
               >
                 Cambiar
               </button>
             </div>
           ) : (
             <div>
-              <div style={{ fontSize: 14, marginBottom: 6 }}>Haz clic aquí para seleccionar un archivo .svg</div>
+              <div style={{ fontSize: 14, marginBottom: 6, color: '#333' }}>Haz clic aquí para seleccionar un archivo .svg</div>
               <div style={{ fontSize: 12, color: '#666' }}>O arrastra y suelta (no soportado: usa selector)</div>
             </div>
           )}
@@ -173,7 +173,7 @@ export default function SvgSelector({ onSelectSvg, selectedSvg, isAdmin }: Props
 
       {/* Seleccionar existente */}
       <div>
-        <h4 style={{ marginBottom: 8 }}>SVGs Disponibles:</h4>
+        <h4 style={{ marginBottom: 8, color: '#333' }}>SVGs Disponibles:</h4>
         <div style={{ display: 'flex', flexWrap: 'wrap' }}>
           {svgs.map(svg => (
             <div key={svg.name} style={{ margin: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -193,7 +193,7 @@ export default function SvgSelector({ onSelectSvg, selectedSvg, isAdmin }: Props
               {isAdmin ? (
                 <button
                   onClick={() => handleDeleteClick(svg.name)}
-                  style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', cursor: 'pointer', background: '#fff' }}
+                  style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', cursor: 'pointer', background: '#dc3545', color: 'white' }}
                 >
                   Eliminar
                 </button>
