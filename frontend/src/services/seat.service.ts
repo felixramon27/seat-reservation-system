@@ -14,7 +14,14 @@ export const reserveSeat = async (seatId: string): Promise<Seat> => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ seatId })
   })
-  if (!response.ok) throw new Error('Failed to reserve seat')
+  if (!response.ok) {
+    let msg = 'Failed to reserve seat'
+    try {
+      const err = await response.json()
+      if (err?.error) msg = err.error
+    } catch {}
+    throw new Error(msg)
+  }
   return response.json()
 }
 
@@ -24,7 +31,14 @@ export const releaseSeat = async (seatId: string): Promise<Seat> => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ seatId })
   })
-  if (!response.ok) throw new Error('Failed to release seat')
+  if (!response.ok) {
+    let msg = 'Failed to release seat'
+    try {
+      const err = await response.json()
+      if (err?.error) msg = err.error
+    } catch {}
+    throw new Error(msg)
+  }
   return response.json()
 }
 

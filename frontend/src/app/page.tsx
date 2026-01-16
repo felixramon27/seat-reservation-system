@@ -1,16 +1,22 @@
 'use client'
 
+import { useState } from 'react'
 import SeatMap from '@/components/svg/SeatMap'
+import SvgSelector from '@/components/SvgSelector'
 import { useSeatSelection } from '@/hooks/useSeatSelection'
 
 export default function Home() {
   const { seats, selectSeat, mode, setMode, selectedSeats, confirmSelection, loading } = useSeatSelection()
+  const [selectedSvg, setSelectedSvg] = useState<string>('')
 
   if (loading) return <div>Cargando...</div>
 
   return (
     <main style={{ padding: 40, fontFamily: 'Arial, sans-serif' }}>
       <h1>Reserva de Asientos</h1>
+      
+      <SvgSelector onSelectSvg={setSelectedSvg} selectedSvg={selectedSvg} isAdmin={mode === 'admin'} />
+      
       <div style={{ marginBottom: 20 }}>
         <button 
           onClick={() => setMode('client')} 
@@ -65,7 +71,7 @@ export default function Home() {
           </button>
         </div>
       )}
-      <SeatMap seats={seats} onSelect={selectSeat} mode={mode} selectedSeats={selectedSeats} />
+      <SeatMap seats={seats} onSelect={selectSeat} mode={mode} selectedSeats={selectedSeats} svgUrl={selectedSvg} />
     </main>
   )
 }
