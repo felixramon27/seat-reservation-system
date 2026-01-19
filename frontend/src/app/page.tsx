@@ -6,8 +6,11 @@ import SvgSelector from '@/components/SvgSelector'
 import { useSeatSelection } from '@/hooks/useSeatSelection'
 
 export default function Home() {
-  const { seats, selectSeat, mode, setMode, selectedSeats, confirmSelection, loading } = useSeatSelection()
-  const [selectedSvg, setSelectedSvg] = useState<string>('')
+  // Load the exported seatmap by default from public/svg
+  const [selectedSvg, setSelectedSvg] = useState<string>('/svg/seatmap2.svg')
+  // Extract filename and strip query string to match backend 'map' stored names
+  const mapFile = selectedSvg ? (selectedSvg.split('/').pop() || '').split('?')[0] : ''
+  const { seats, selectSeat, mode, setMode, selectedSeats, confirmSelection, loading } = useSeatSelection(mapFile)
 
   if (loading) return <div>Cargando...</div>
 

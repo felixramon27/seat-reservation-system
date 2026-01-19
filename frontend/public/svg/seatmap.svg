@@ -1,7 +1,0 @@
-<svg viewBox="0 0 300 120" xmlns="http://www.w3.org/2000/svg">
-  <g id="zone-vip">
-    <path id="seat-A1" d="M10 10 H60 V60 H10 Z" />
-    <path id="seat-A2" d="M80 10 H130 V60 H80 Z" />
-    <path id="seat-A3" d="M150 10 H200 V60 H150 Z" />
-  </g>
-</svg>

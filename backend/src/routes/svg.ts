@@ -25,6 +25,34 @@ export default async function svgRoutes(fastify: FastifyInstance) {
       const urlRes = supabase.storage.from('svgs').getPublicUrl(fileName)
       const publicUrl = urlRes.data?.publicUrl
       console.log('Public URL:', publicUrl)
+      // After upload, parse svgContent to find seat-like ids and create seat records scoped to this file
+      try {
+        // Extract ids from svgContent
+        const idRegex = /\sid=["']?([a-zA-Z0-9_\-]+)["']?/g
+        const ids: string[] = []
+        let m: RegExpExecArray | null
+        while ((m = idRegex.exec(svgContent)) !== null) {
+          if (m[1]) ids.push(m[1])
+        }
+        // Also look for common data attributes (data-seat) and text labels like A1, B12
+        const dataSeatRegex = /data-seat=["']?([a-zA-Z0-9_\-]+)["']?/g
+        while ((m = dataSeatRegex.exec(svgContent)) !== null) {
+          if (m[1]) ids.push(m[1])
+        }
+
+        // dedupe
+        const uniq = Array.from(new Set(ids))
+        const seatsToInsert = uniq.map(extId => ({ id: `${fileName}::${extId}`, externalId: extId, map: fileName, status: 'available' }))
+        if (seatsToInsert.length > 0) {
+          // remove existing seats for this map to avoid duplicates
+          const Seat = require('../models/Seat').default
+          await Seat.deleteMany({ map: fileName })
+          await Seat.insertMany(seatsToInsert)
+          console.log(`Seeded ${seatsToInsert.length} seats for map ${fileName}`)
+        }
+      } catch (err) {
+        console.warn('SVG upload: failed to auto-create seats:', err)
+      }
       return { url: publicUrl, fileName }
     } catch (error) {
       console.error('Error uploading SVG (catch):', error)

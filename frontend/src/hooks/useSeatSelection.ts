@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Seat } from '@/types/seat'
 import { getSeats, reserveSeat, releaseSeat, getMockSeats } from '@/services/seat.service'
 
-export function useSeatSelection() {
+export function useSeatSelection(map?: string) {
   const [seats, setSeats] = useState<Seat[]>([])
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<'client' | 'admin'>('client')
@@ -10,9 +10,15 @@ export function useSeatSelection() {
 
   useEffect(() => {
     const fetchSeats = async () => {
+      setLoading(true)
+      setSelectedSeats([])
+      setSeats([])
       try {
-        const data = await getSeats()
-        setSeats(data)
+        const data = await getSeats(map)
+        // backend returns seats with id = `${map}::${externalId}` and externalId
+        // transform to frontend Seat shape where id is externalId
+        const transformed = data.map((s: any) => ({ id: s.externalId || s.id, status: s.status }))
+        setSeats(transformed)
       } catch (error) {
         console.error('Failed to fetch seats, using mocks:', error)
         setSeats(getMockSeats())
@@ -21,7 +27,7 @@ export function useSeatSelection() {
       }
     }
     fetchSeats()
-  }, [])
+  }, [map])
 
   const selectSeat = async (seatId: string) => {
     if (mode === 'client') {
@@ -36,7 +42,7 @@ export function useSeatSelection() {
       const seat = seats.find(s => s.id === seatId)
       if (seat?.status === 'reserved') {
         try {
-          await releaseSeat(seatId)
+          await releaseSeat(map, seatId)
           setSeats(prev => prev.map(s => s.id === seatId ? { ...s, status: 'available' } : s))
         } catch (error) {
           console.error('Failed to release seat:', error)
@@ -50,8 +56,8 @@ export function useSeatSelection() {
   const confirmSelection = async () => {
     for (const seatId of selectedSeats) {
       try {
-        const updatedSeat = await reserveSeat(seatId)
-        setSeats(prev => prev.map(seat => seat.id === seatId ? updatedSeat : seat))
+        const updatedSeat = await reserveSeat(map, seatId)
+        setSeats(prev => prev.map(seat => seat.id === seatId ? { ...seat, status: updatedSeat.status } : seat))
       } catch (error) {
         console.error('Failed to reserve seat:', error)
       }
