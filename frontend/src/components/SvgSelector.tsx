@@ -205,8 +205,8 @@ export default function SvgSelector({ onSelectSvg, selectedSvg, isAdmin }: Props
       {/* Delete confirmation modal */}
       {deleteTarget && (
         <div style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}>
-          <div style={{ background: 'white', padding: 20, borderRadius: 8, minWidth: 300 }}>
-            <h4 style={{ marginTop: 0 }}>Confirmar eliminación</h4>
+          <div style={{ background: 'white', padding: 20, borderRadius: 8, minWidth: 300, color: '#333' }}>
+            <h4 style={{ marginTop: 0, marginBottom: 12 }}>Confirmar eliminación</h4>
             <p>¿Eliminar <strong>{deleteTarget}</strong>? Esta acción es irreversible.</p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
               <button onClick={handleCancelDelete} style={{ padding: '6px 10px', borderRadius: 6 }}>Cancelar</button>
