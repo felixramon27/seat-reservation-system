@@ -132,7 +132,7 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
                   if (m[1]) ids.push(m[1])
                 }
                 svgOriginalIdsRef.current = new Set(ids)
-              } catch (err) {
+              } catch {
                 svgOriginalIdsRef.current = new Set()
               }
             }
@@ -180,14 +180,14 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
 
       try {
         el.setAttribute('fill', color)
-      } catch (e) {
+      } catch {
         /* ignore */
       }
       // also set inline style to ensure CSS rules don't override
       try {
         el.style.setProperty('fill', color, 'important')
         el.style.fill = color
-      } catch (e) {
+      } catch {
         /* ignore */
       }
 
@@ -202,7 +202,7 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
     // diagnostics for developer (always log for easier debugging)
     console.log(`SeatMap: svgUrl=${svgUrl} seats total=${seats.length}, found=${found.length}, missing=${missing.length}`)
     if (missing.length) console.log('SeatMap: missing ids sample:', missing.slice(0, 10))
-  }, [seats, onSelect, mode, selectedSeats, svgContent]);
+  }, [seats, onSelect, mode, selectedSeats, svgContent, svgPrefix, svgUrl]);
 
   return (
     <div
