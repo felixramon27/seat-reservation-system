@@ -9,15 +9,17 @@ export function useSeatSelection(map?: string) {
   const [selectedSeats, setSelectedSeats] = useState<string[]>([])
 
   useEffect(() => {
+    type BackendSeat = { id: string; externalId?: string; status: Seat['status'] }
+
     const fetchSeats = async () => {
       setLoading(true)
       setSelectedSeats([])
       setSeats([])
       try {
-        const data = await getSeats(map)
+        const data = await getSeats(map) as BackendSeat[]
         // backend returns seats with id = `${map}::${externalId}` and externalId
         // transform to frontend Seat shape where id is externalId
-        const transformed = data.map((s: any) => ({ id: s.externalId || s.id, status: s.status }))
+        const transformed = data.map((s) => ({ id: s.externalId || s.id, status: s.status }))
         setSeats(transformed)
       } catch (error) {
         console.error('Failed to fetch seats, using mocks:', error)
