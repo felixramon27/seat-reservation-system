@@ -66,3 +66,6 @@ Thumbs.db
 
 # Local storage
 svgs/
+
+# Gcp files
+/gcloud-key.json

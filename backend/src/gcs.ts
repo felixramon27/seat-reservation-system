@@ -24,3 +24,14 @@ export const getSVG = async (fileName: string) => {
   const [content] = await file.download()
   return content.toString()
 }
+
+export const listSVGs = async () => {
+  const [files] = await bucket.getFiles()
+  return files.map(f => ({ name: f.name, url: `https://storage.googleapis.com/${bucketName}/${f.name}` }))
+}
+
+export const deleteSVG = async (fileName: string) => {
+  const file = bucket.file(fileName)
+  await file.delete({ ignoreNotFound: true })
+  return { deleted: fileName }
+}
