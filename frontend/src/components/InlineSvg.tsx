@@ -26,6 +26,7 @@ export default function InlineSvg({ src, seatFills, removeDefs, className, onSea
   useEffect(() => {
     let mounted = true;
     let appended: SVGElement | null = null;
+    let container: HTMLDivElement | null = null;
 
     (async () => {
       try {
@@ -33,9 +34,12 @@ export default function InlineSvg({ src, seatFills, removeDefs, className, onSea
         if (!mounted) return;
         appended = svg;
         if (containerRef.current) {
+          // capture container for later cleanup
+          container = containerRef.current;
+
           // Clear previous
-          containerRef.current.innerHTML = "";
-          containerRef.current.appendChild(svg);
+          container.innerHTML = "";
+          container.appendChild(svg);
 
           // expose svg to caller (stable ref used)
           onSvgLoadedRef.current?.(svg);
@@ -58,11 +62,17 @@ export default function InlineSvg({ src, seatFills, removeDefs, className, onSea
           svg.addEventListener('click', clickHandler as EventListener);
 
           // store handler on element for cleanup
-          (svg as any).__inlineSvgCleanup = () => svg.removeEventListener('click', clickHandler as EventListener);
+          (svg as SVGElement & { __inlineSvgCleanup?: () => void }).__inlineSvgCleanup = () => svg.removeEventListener('click', clickHandler as EventListener);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('InlineSvg error', e);
-        if (mounted) setError(String(e.message || e));
+        if (mounted) {
+          if (e instanceof Error) {
+            setError(e.message);
+          } else {
+            setError(String(e));
+          }
+        }
       }
     })();
 
@@ -70,10 +80,10 @@ export default function InlineSvg({ src, seatFills, removeDefs, className, onSea
       mounted = false;
       if (appended) {
         try {
-          const cleanup = (appended as any).__inlineSvgCleanup;
+          const cleanup = (appended as SVGElement & { __inlineSvgCleanup?: () => void }).__inlineSvgCleanup;
           if (typeof cleanup === 'function') cleanup();
         } catch {}
-        if (containerRef.current && appended.parentNode === containerRef.current) containerRef.current.removeChild(appended);
+        if (container && appended.parentNode === container) container.removeChild(appended);
       }
     };
   }, [src, seatFills, removeDefs]);
