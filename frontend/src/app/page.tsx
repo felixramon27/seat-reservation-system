@@ -7,7 +7,7 @@ import { useSeatSelection } from '@/hooks/useSeatSelection'
 
 export default function Home() {
   // Load the exported seatmap by default from public/svg
-  const [selectedSvg, setSelectedSvg] = useState<string>('/svg/seatmap2.svg')
+  const [selectedSvg, setSelectedSvg] = useState<string>()
   // Extract filename and strip query string to match backend 'map' stored names
   const mapFile = selectedSvg ? (selectedSvg.split('/').pop() || '').split('?')[0] : ''
   const { seats, selectSeat, mode, setMode, selectedSeats, confirmSelection, loading } = useSeatSelection(mapFile)

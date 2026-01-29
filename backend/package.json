@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "dev:v2": "ts-node src/tkServiceV2.ts"
   },
   "keywords": [],
   "author": "",

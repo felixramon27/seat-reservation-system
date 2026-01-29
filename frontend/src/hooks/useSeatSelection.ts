@@ -31,6 +31,68 @@ export function useSeatSelection(map?: string) {
     fetchSeats()
   }, [map])
 
+  // Efecto para manejar la conexión WebSocket en tiempo real
+  useEffect(() => {
+    let ws: WebSocket | null = null
+    let reconnectTimeout: NodeJS.Timeout
+    let isMounted = true
+
+    const connect = () => {
+      ws = new WebSocket('ws://localhost:5001')
+
+      ws.onopen = () => {
+        console.log('🟢 Conectado al servicio de tiempo real de sillas')
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          
+          if (data.type === 'SEAT_UPDATE' && data.seat) {
+            const updatedSeat = data.seat
+            console.log('📩 WebSocket Update recibido:', updatedSeat) // Log para ver qué llega exactamente
+            
+            setSeats((prevSeats) => {
+            // Si el asiento actualizado pertenece a otro mapa (si existe esa propiedad), lo ignoramos
+            if (map && updatedSeat.map && updatedSeat.map !== map) return prevSeats
+
+            // Intentamos obtener el ID correcto buscando en varias propiedades comunes (_id, id, seatId)
+            // Priorizamos externalId porque es el ID que usa el frontend (ej: "seat-A8")
+            const targetId = updatedSeat.externalId || updatedSeat.seatId || updatedSeat.id || updatedSeat._id
+
+            return prevSeats.map((seat) => {
+              const isMatch = String(seat.id) === String(targetId)
+              if (isMatch) console.log(`✅ Silla encontrada y actualizada: ${seat.id}`)
+              return isMatch
+                ? { ...seat, status: updatedSeat.status } 
+                : seat
+            })
+            })
+          }
+        } catch (error) {
+          console.error('Error procesando mensaje WS:', error)
+        }
+      }
+
+      ws.onclose = () => {
+        if (isMounted) {
+          console.log('🔴 Desconectado. Intentando reconectar en 3 segundos...')
+          reconnectTimeout = setTimeout(connect, 3000)
+        }
+      }
+    }
+
+    connect()
+
+    return () => {
+      isMounted = false
+      clearTimeout(reconnectTimeout)
+      if (ws) {
+        ws.close()
+      }
+    }
+  }, [map])
+
   const selectSeat = async (seatId: string) => {
     if (mode === 'client') {
       // Toggle selection
