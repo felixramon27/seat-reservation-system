@@ -10,7 +10,7 @@ export default function Home() {
   const [selectedSvg, setSelectedSvg] = useState<string>()
   // Extract filename and strip query string to match backend 'map' stored names
   const mapFile = selectedSvg ? (selectedSvg.split('/').pop() || '').split('?')[0] : ''
-  const { seats, selectSeat, mode, setMode, selectedSeats, confirmSelection, loading } = useSeatSelection(mapFile)
+  const { seats, selectSeat, mode, setMode, selectedSeats, confirmSelection, confirmBooking, heldSeats, loading } = useSeatSelection(mapFile)
 
   if (loading) return <div>Cargando...</div>
 
@@ -57,7 +57,7 @@ export default function Home() {
           : 'Haz clic en asientos disponibles para reservarlos, haz clic en asientos reservados para liberarlos.'}
       </p>
       {selectedSeats.length > 0 && mode === 'client' && (
-        <div style={{ marginBottom: 20, padding: '10px', borderRadius: '5px' }}>
+        <div style={{ marginBottom: 20, padding: '10px', borderRadius: '5px', display: 'flex', gap: '10px', alignItems: 'center' }}>
           <p>Asientos seleccionados: {selectedSeats.join(', ')}</p>
           <button 
             onClick={confirmSelection}
@@ -70,10 +70,26 @@ export default function Home() {
               cursor: 'pointer'
             }}
           >
-            Confirmar Reserva
+            Reservar (5 min)
           </button>
         </div>
       )}
+
+      {/* Botón para Confirmar Compra Definitiva */}
+      {heldSeats.length > 0 && mode === 'client' && (
+        <div style={{ marginBottom: 20, padding: '15px', backgroundColor: '#fff3cd', border: '1px solid #ffeeba', borderRadius: '5px' }}>
+          <p style={{ margin: '0 0 10px 0', color: '#856404' }}>
+            Tienes <b>{heldSeats.length}</b> asientos reservados temporalmente. ¡Confirma tu compra antes de que expire el tiempo!
+          </p>
+          <button 
+            onClick={confirmBooking}
+            style={{ padding: '10px 20px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            Confirmar Compra Definitiva
+          </button>
+        </div>
+      )}
+
       <SeatMap seats={seats} onSelect={selectSeat} mode={mode} selectedSeats={selectedSeats} svgUrl={selectedSvg} />
     </main>
   )

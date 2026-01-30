@@ -94,7 +94,29 @@ const start = async () => {
   }
 
   // ---------------------------------------------------------
-  // 4. Iniciar Servidores
+  // 4. Tarea en segundo plano: Liberar sillas expiradas (Hold System)
+  // ---------------------------------------------------------
+  setInterval(async () => {
+    try {
+      // Busca sillas reservadas cuya fecha de expiración ya pasó
+      const result = await Seat.updateMany(
+        { status: 'reserved', expiresAt: { $lt: new Date() } } as any,
+        { 
+          status: 'available', 
+          $unset: { expiresAt: 1 } // Elimina el campo expiresAt
+        } as any
+      );
+      
+      if (result.modifiedCount > 0) {
+        console.log(`🧹 Mantenimiento: Se liberaron ${result.modifiedCount} sillas por tiempo expirado.`);
+      }
+    } catch (error) {
+      console.error('Error en el proceso de limpieza de sillas:', error);
+    }
+  }, 60000); // Ejecutar cada 60 segundos
+
+  // ---------------------------------------------------------
+  // 5. Iniciar Servidores
   // ---------------------------------------------------------
   try {
     await app.listen({ port: 5000, host: '0.0.0.0' });

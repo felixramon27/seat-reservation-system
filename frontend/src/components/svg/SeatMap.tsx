@@ -37,6 +37,9 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const tooltipIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (svgUrl) {
       setIsLoading(true);
@@ -163,8 +166,10 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
       found.push(seat.id)
 
       // 🎨 COLOR (use setAttribute + inline style). Mapping: available=black, selected=green, reserved=grey
-      let color = '#9ca3af' // grey reserved
+      let color = '#9ca3af' // GRIS por defecto para reservado (Confirmado)
+      if (seat.status === 'reserved' && seat.expiresAt) color = '#ef4444' // ROJO si es temporal (Held)
       if (seat.status === 'available') color = '#000000'
+      
       if (mode === 'client' && selectedSeats.includes(seat.id)) color = '#22c55e'
 
       try {
@@ -186,6 +191,52 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
 
       // 🧠 CLICK
       el.onclick = isClickable ? () => onSelect(seat.id) : null
+
+      // 🕒 HOVER (Mostrar tiempo restante si está reservada)
+      if (seat.status === 'reserved' && seat.expiresAt) {
+        // Usamos addEventListener nativo para no depender de React Synthetic Events ni re-renders
+        el.addEventListener('mouseenter', () => {
+          if (tooltipRef.current) {
+            tooltipRef.current.style.display = 'block';
+            
+            // Función para actualizar el texto
+            const updateText = () => {
+              if (!tooltipRef.current) return;
+              const now = new Date().getTime();
+              const expire = new Date(seat.expiresAt!).getTime();
+              const diff = expire - now;
+              
+              if (diff <= 0) {
+                tooltipRef.current.innerText = 'Expirado';
+              } else {
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                tooltipRef.current.innerText = `Libera en: ${minutes}m ${seconds}s`;
+              }
+            };
+            
+            updateText();
+            tooltipIntervalRef.current = setInterval(updateText, 1000);
+          }
+        });
+
+        el.addEventListener('mousemove', (e) => {
+          if (tooltipRef.current) {
+            tooltipRef.current.style.top = `${e.clientY - 40}px`;
+            tooltipRef.current.style.left = `${e.clientX}px`;
+          }
+        });
+
+        el.addEventListener('mouseleave', () => {
+          if (tooltipRef.current) tooltipRef.current.style.display = 'none';
+          if (tooltipIntervalRef.current) clearInterval(tooltipIntervalRef.current);
+        });
+      } else {
+        // Limpiar eventos si cambia de estado
+        el.onmouseenter = null;
+        el.onmousemove = null;
+        el.onmouseleave = null;
+      }
     })
 
     // diagnostics for developer (always log for easier debugging)
@@ -208,9 +259,27 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
   return (
     <div
       ref={containerRef}
-      dangerouslySetInnerHTML={{
-        __html: fetchedSvg,
-      }}
-    />
+      style={{ position: 'relative' }} // Necesario para posicionamiento relativo si usáramos absolute
+    >
+      <div dangerouslySetInnerHTML={{ __html: fetchedSvg }} />
+      
+      {/* Tooltip persistente controlado por Refs (Sin Re-renders) */}
+      <div 
+        ref={tooltipRef}
+        style={{
+          display: 'none',
+          position: 'fixed',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          color: 'white',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          pointerEvents: 'none',
+          zIndex: 1000,
+          whiteSpace: 'nowrap'
+        }}
+      />
+    </div>
   );
 }

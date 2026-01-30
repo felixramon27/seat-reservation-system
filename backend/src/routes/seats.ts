@@ -20,17 +20,53 @@ export default async function seatRoutes(fastify: FastifyInstance) {
   fastify.post('/seats/reserve', async (request, reply) => {
     try {
       const { map, seatId } = request.body as { map?: string, seatId: string }
-      let seat
-      if (map) seat = await Seat.findOne({ id: `${map}::${seatId}` })
-      else seat = await Seat.findOne({ id: seatId })
-      if (!seat || seat.status !== 'available') {
-        return reply.code(400).send({ error: 'Seat not available' })
+      
+      // Construimos el ID único que se usa en la base de datos
+      const dbId = map ? `${map}::${seatId}` : seatId
+
+      // Operación Atómica: Busca Y Actualiza solo si el estado es 'available'
+      const seat = await Seat.findOneAndUpdate(
+        { id: dbId, status: 'available' },
+        { 
+          status: 'reserved',
+          // Establecemos expiración a 5 minutos desde ahora
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000) 
+        } as any, // Cast a any por si no has actualizado la interfaz ISeat aún
+        { new: true } // Devuelve el documento actualizado
+      )
+
+      if (!seat) {
+        // Si es null, significa que no existía o que alguien más la ganó por milisegundos
+        return reply.code(409).send({ error: 'La silla ya no está disponible.' })
       }
-      seat.status = 'reserved'
-      await seat.save()
       return seat
     } catch (error) {
       console.error('Error reserving seat:', error)
+      reply.code(500).send({ error: 'Database error' })
+    }
+  })
+
+  // Confirmar reserva (Hacerla permanente)
+  fastify.post('/seats/confirm', async (request, reply) => {
+    try {
+      const { map, seatId } = request.body as { map?: string, seatId: string }
+      const dbId = map ? `${map}::${seatId}` : seatId
+
+      // Busca una silla que esté reservada y actualízala para quitar la expiración
+      const seat = await Seat.findOneAndUpdate(
+        { id: dbId, status: 'reserved' },
+        { 
+          $unset: { expiresAt: 1 } // Elimina el campo expiresAt para que no se libere nunca
+        },
+        { new: true }
+      )
+
+      if (!seat) {
+        return reply.code(404).send({ error: 'Reserva no encontrada o expirada.' })
+      }
+      return seat
+    } catch (error) {
+      console.error('Error confirming seat:', error)
       reply.code(500).send({ error: 'Database error' })
     }
   })

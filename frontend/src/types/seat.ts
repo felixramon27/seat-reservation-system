@@ -1,6 +1,7 @@
 export type SeatStatus = 'available' | 'selected' | 'reserved'
 
 export type Seat = {
-  id: string
-  status: SeatStatus
+  id: string;
+  status: SeatStatus;
+  expiresAt?: string;
 }

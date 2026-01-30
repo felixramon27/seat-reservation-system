@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Seat } from '@/types/seat'
-import { getSeats, reserveSeat, releaseSeat, getMockSeats } from '@/services/seat.service'
+import { getSeats, reserveSeat, confirmSeat, releaseSeat, getMockSeats } from '@/services/seat.service'
 
 export function useSeatSelection(map?: string) {
   const [seats, setSeats] = useState<Seat[]>([])
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<'client' | 'admin'>('client')
   const [selectedSeats, setSelectedSeats] = useState<string[]>([])
+  // Sillas que este usuario ha reservado temporalmente (para mostrar botón de confirmar)
+  const [heldSeats, setHeldSeats] = useState<string[]>([])
 
   useEffect(() => {
-    type BackendSeat = { id: string; externalId?: string; status: Seat['status'] }
+    type BackendSeat = { id: string; externalId?: string; status: Seat['status']; expiresAt?: string }
 
     const fetchSeats = async () => {
       setLoading(true)
@@ -19,7 +22,11 @@ export function useSeatSelection(map?: string) {
         const data = await getSeats(map) as BackendSeat[]
         // backend returns seats with id = `${map}::${externalId}` and externalId
         // transform to frontend Seat shape where id is externalId
-        const transformed = data.map((s) => ({ id: s.externalId || s.id, status: s.status }))
+        const transformed = data.map((s) => ({ 
+          id: s.externalId || s.id, 
+          status: s.status,
+          expiresAt: s.expiresAt // Pasamos la fecha de expiración
+        }))
         setSeats(transformed)
       } catch (error) {
         console.error('Failed to fetch seats, using mocks:', error)
@@ -38,7 +45,8 @@ export function useSeatSelection(map?: string) {
     let isMounted = true
 
     const connect = () => {
-      ws = new WebSocket('ws://localhost:5001')
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5001'
+      ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
         console.log('🟢 Conectado al servicio de tiempo real de sillas')
@@ -64,7 +72,7 @@ export function useSeatSelection(map?: string) {
               const isMatch = String(seat.id) === String(targetId)
               if (isMatch) console.log(`✅ Silla encontrada y actualizada: ${seat.id}`)
               return isMatch
-                ? { ...seat, status: updatedSeat.status } 
+                ? { ...seat, status: updatedSeat.status, expiresAt: updatedSeat.expiresAt } 
                 : seat
             })
             })
@@ -108,8 +116,10 @@ export function useSeatSelection(map?: string) {
         try {
           await releaseSeat(map, seatId)
           setSeats(prev => prev.map(s => s.id === seatId ? { ...s, status: 'available' } : s))
+          toast.success('Asiento liberado correctamente')
         } catch (error) {
           console.error('Failed to release seat:', error)
+          toast.error('Error al liberar el asiento')
           // Fallback: update local state
           setSeats(prev => prev.map(s => s.id === seatId ? { ...s, status: 'available' } : s))
         }
@@ -117,16 +127,44 @@ export function useSeatSelection(map?: string) {
     }
   }
 
+  // Paso 1: Reservar temporalmente (Hold 5 min)
   const confirmSelection = async () => {
+    const newlyHeld: string[] = []
     for (const seatId of selectedSeats) {
       try {
         const updatedSeat = await reserveSeat(map, seatId)
         setSeats(prev => prev.map(seat => seat.id === seatId ? { ...seat, status: updatedSeat.status } : seat))
+        newlyHeld.push(seatId)
+        toast.success(`Asiento ${seatId} reservado por 5 minutos. ¡Confirma tu compra!`)
       } catch (error) {
-        console.error('Failed to reserve seat:', error)
+        // Usamos warn en lugar de error para evitar ruido en la consola, ya que es un flujo controlado
+        console.warn('No se pudo completar la reserva:', seatId)
+        // Mostramos el mensaje exacto que viene del backend ("La silla ya no está disponible")
+        const message = error instanceof Error ? error.message : `No se pudo reservar el asiento ${seatId}`
+        toast.error(message)
       }
     }
+    setHeldSeats(prev => [...prev, ...newlyHeld])
     setSelectedSeats([])
+  }
+
+  // Paso 2: Confirmación Definitiva (Compra)
+  const confirmBooking = async () => {
+    const confirmedIds: string[] = [] // Lista temporal para guardar las que sí funcionaron
+
+    for (const seatId of heldSeats) {
+      try {
+        const updatedSeat = await confirmSeat(map, seatId)
+        setSeats(prev => prev.map(seat => seat.id === seatId ? { ...seat, status: updatedSeat.status, expiresAt: undefined } : seat))
+        toast.success(`¡Compra confirmada para el asiento ${seatId}!`)
+        confirmedIds.push(seatId)
+      } catch (error: any) {
+        console.error('Error confirmando:', error)
+        toast.error(error.message || `Error al confirmar ${seatId}`)
+      }
+    }
+    // Solo quitamos de la lista de espera las sillas que se confirmaron exitosamente
+    setHeldSeats(prev => prev.filter(id => !confirmedIds.includes(id)))
   }
 
   const clearSelection = () => {
@@ -143,5 +181,7 @@ export function useSeatSelection(map?: string) {
     setMode,
     selectedSeats,
     confirmSelection,
+    confirmBooking, // Nueva función expuesta
+    heldSeats,      // Para saber si mostrar el botón de "Confirmar Compra"
   }
 }
