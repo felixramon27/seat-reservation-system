@@ -26,6 +26,23 @@ export const reserveSeat = async (map: string | undefined, seatId: string): Prom
   return response.json()
 }
 
+export const confirmSeat = async (map: string | undefined, seatId: string): Promise<Seat> => {
+  const response = await fetch(`${API_BASE}/seats/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ map, seatId })
+  })
+  if (!response.ok) {
+    let msg = 'Failed to confirm seat'
+    try {
+      const err = await response.json()
+      if (err?.error) msg = err.error
+    } catch {}
+    throw new Error(msg)
+  }
+  return response.json()
+}
+
 export const releaseSeat = async (map: string | undefined, seatId: string): Promise<Seat> => {
   const response = await fetch(`${API_BASE}/seats/release`, {
     method: 'POST',

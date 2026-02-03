@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Seat } from "@/types/seat";
 
 type Props = {
@@ -11,66 +11,56 @@ type Props = {
   svgUrl?: string;
 };
 
-const getDefaultSVG = () => `
-  <svg width="800" height="600" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
-    <!-- Estilos para interactividad -->
-    <style>
-      .asiento { cursor: pointer; transition: 0.2s; }
-      .asiento:hover { opacity: 0.7; }
-      .zona-vip { stroke: #B8860B; stroke-width: 2; }
-      .zona-general { stroke: #808080; stroke-width: 2; }
-      .ocupado { fill: #FF4500 !important; cursor: not-allowed; }
-      text { pointer-events: none; user-select: none; }
-    </style>
+const Loader = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px', fontFamily: 'Arial', color: '#666' }}>
+    Cargando mapa...
+  </div>
+);
 
-    <!-- ESCENARIO -->
-    <rect x="200" y="20" width="400" height="60" rx="10" fill="#2F4F4F" />
-    <text x="400" y="58" font-family="Arial" font-size="24" text-anchor="middle" fill="white">ESCENARIO</text>
+const NoMapPlaceholder = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px', border: '2px dashed #ccc', borderRadius: '8px', color: '#666', fontFamily: 'Arial', textAlign: 'center', padding: '20px' }}>
+    <p>No hay ningún mapa seleccionado para mostrar.<br/>Por favor, selecciona un mapa de la lista.</p>
+  </div>
+);
 
-    <!-- ETAPA 1: SECCIÓN VIP -->
-    <g id="etapa-vip" class="zona-vip">
-      <text x="50" y="130" font-family="Arial" font-weight="bold" font-size="18" fill="#333">ETAPA 1: VIP</text>
-      <rect id="seat-A1" class="asiento" x="100" y="160" width="50" height="50" rx="8" />
-      <rect id="seat-A2" class="asiento" x="170" y="160" width="50" height="50" rx="8" />
-      <rect id="seat-A3" class="asiento" x="240" y="160" width="50" height="50" rx="8" />
-      <text id="text-A1" x="125" y="190" font-family="Arial" font-size="12" text-anchor="middle">A1</text>
-      <text id="text-A2" x="195" y="190" font-family="Arial" font-size="12" text-anchor="middle">A2</text>
-      <text id="text-A3" x="265" y="190" font-family="Arial" font-size="12" text-anchor="middle">A3</text>
-    </g>
-
-    <!-- ETAPA 2: SECCIÓN GENERAL -->
-    <g id="etapa-general" class="zona-general">
-      <text x="50" y="300" font-family="Arial" font-weight="bold" font-size="18" fill="#333">ETAPA 2: GENERAL</text>
-      <rect id="seat-B1" class="asiento" x="100" y="330" width="50" height="50" rx="8" />
-      <rect id="seat-B2" class="asiento" x="170" y="330" width="50" height="50" rx="8" />
-      <rect id="seat-B3" class="asiento" x="240" y="330" width="50" height="50" rx="8" />
-      <rect id="seat-B4" class="asiento" x="310" y="330" width="50" height="50" rx="8" />
-      <text id="text-B1" x="125" y="360" font-family="Arial" font-size="12" text-anchor="middle">B1</text>
-      <text id="text-B2" x="195" y="360" font-family="Arial" font-size="12" text-anchor="middle">B2</text>
-      <text id="text-B3" x="265" y="360" font-family="Arial" font-size="12" text-anchor="middle">B3</text>
-      <text id="text-B4" x="335" y="360" font-family="Arial" font-size="12" text-anchor="middle">B4</text>
-    </g>
-  </svg>
-`;
+const ErrorDisplay = ({ message }: { message: string }) => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px', border: '2px solid #f5c6cb', borderRadius: '8px', color: '#721c24', backgroundColor: '#f8d7da', fontFamily: 'Arial', textAlign: 'center', padding: '20px' }}>
+    <p><b>Error:</b> {message}</p>
+  </div>
+);
 
 export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeats = [], svgUrl }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [fetchedSvg, setFetchedSvg] = useState<string>('');
   const [svgPrefix, setSvgPrefix] = useState<string>('');
-  const svgOriginalIdsRef = useRef<Set<string>>(new Set())
+  const svgOriginalIdsRef = useRef<Set<string>>(new Set());
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const svgContent = useMemo(() => {
-    if (svgUrl) {
-      return fetchedSvg || getDefaultSVG();
-    }
-    return getDefaultSVG();
-  }, [svgUrl, fetchedSvg]);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const tooltipIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (svgUrl) {
-      fetch(svgUrl)
-        .then(res => res.text())
-          .then((text) => {
+      setIsLoading(true);
+      setError(null);
+      setFetchedSvg('');
+      svgOriginalIdsRef.current = new Set();
+
+      const isRemote = svgUrl.startsWith('http');
+      const urlToFetch = isRemote 
+        ? `/api/proxy?url=${encodeURIComponent(svgUrl)}` 
+        : svgUrl;
+
+      fetch(urlToFetch)
+        .then(res => {
+          if (!res.ok) {
+            if (res.status === 404) throw new Error(`El mapa no fue encontrado en la URL especificada.`);
+            throw new Error(`Error al cargar el SVG: ${res.status} ${res.statusText}`);
+          }
+          return res.text();
+        })
+        .then((text) => {
             // create a short unique prefix for this SVG instance
             const prefix = 'map' + Date.now()
             setSvgPrefix(prefix)
@@ -80,6 +70,10 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
               const parser = new DOMParser()
               const doc = parser.parseFromString(text, 'image/svg+xml')
               const svgEl = doc.documentElement
+              if (svgEl.tagName.toLowerCase() !== 'svg' || doc.getElementsByTagName('parsererror').length > 0) {
+                // This happens if the fetched content is not a valid SVG, e.g., an error message from the proxy
+                throw new Error("El recurso obtenido no es un archivo SVG válido.");
+              }
               if (svgEl) {
                 svgOriginalIdsRef.current = new Set()
                 // find all elements with an id attribute
@@ -120,31 +114,29 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
                 setFetchedSvg(transformed)
                 return
               }
-            } catch (e) {
-              // fallback to original text if parsing fails
+            } catch (e: unknown) {
               console.warn('SeatMap: DOMParser failed, falling back to raw text', e)
-              // try to extract ids with a regex as a best-effort fallback
-              try {
-                const ids: string[] = []
-                const idRegex = /\sid=["']?([a-zA-Z0-9_-]+)["']?/g
-                let m: RegExpExecArray | null
-                while ((m = idRegex.exec(text)) !== null) {
-                  if (m[1]) ids.push(m[1])
-                }
-                svgOriginalIdsRef.current = new Set(ids)
-              } catch {
-                svgOriginalIdsRef.current = new Set()
-              }
+              const errorMessage = e instanceof Error ? e.message : "Error al procesar el archivo SVG.";
+              throw new Error(errorMessage);
             }
-            // fallback
-            setFetchedSvg(text)
-          })
-        .catch(() => setFetchedSvg(getDefaultSVG()));
+        })
+        .catch((err: Error) => {
+          console.error("Error al cargar o procesar el SVG desde la URL:", svgUrl, err);
+          setError(err.message || "Ocurrió un error desconocido al cargar el mapa.");
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      // No svgUrl provided, reset states
+      setIsLoading(false);
+      setError(null);
+      setFetchedSvg('');
     }
   }, [svgUrl]);
 
   useEffect(() => {
-    if (!containerRef.current || !svgContent) return;
+    if (!containerRef.current || !fetchedSvg) return;
     // Debug lists
     const found: string[] = []
     const missing: string[] = []
@@ -174,8 +166,10 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
       found.push(seat.id)
 
       // 🎨 COLOR (use setAttribute + inline style). Mapping: available=black, selected=green, reserved=grey
-      let color = '#9ca3af' // grey reserved
+      let color = '#9ca3af' // GRIS por defecto para reservado (Confirmado)
+      if (seat.status === 'reserved' && seat.expiresAt) color = '#ef4444' // ROJO si es temporal (Held)
       if (seat.status === 'available') color = '#000000'
+      
       if (mode === 'client' && selectedSeats.includes(seat.id)) color = '#22c55e'
 
       try {
@@ -197,19 +191,95 @@ export default function SeatMap({ seats, onSelect, mode = 'client', selectedSeat
 
       // 🧠 CLICK
       el.onclick = isClickable ? () => onSelect(seat.id) : null
+
+      // 🕒 HOVER (Mostrar tiempo restante si está reservada)
+      if (seat.status === 'reserved' && seat.expiresAt) {
+        // Usamos addEventListener nativo para no depender de React Synthetic Events ni re-renders
+        el.addEventListener('mouseenter', () => {
+          if (tooltipRef.current) {
+            tooltipRef.current.style.display = 'block';
+            
+            // Función para actualizar el texto
+            const updateText = () => {
+              if (!tooltipRef.current) return;
+              const now = new Date().getTime();
+              const expire = new Date(seat.expiresAt!).getTime();
+              const diff = expire - now;
+              
+              if (diff <= 0) {
+                tooltipRef.current.innerText = 'Expirado';
+              } else {
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                tooltipRef.current.innerText = `Libera en: ${minutes}m ${seconds}s`;
+              }
+            };
+            
+            updateText();
+            tooltipIntervalRef.current = setInterval(updateText, 1000);
+          }
+        });
+
+        el.addEventListener('mousemove', (e) => {
+          if (tooltipRef.current) {
+            tooltipRef.current.style.top = `${e.clientY - 40}px`;
+            tooltipRef.current.style.left = `${e.clientX}px`;
+          }
+        });
+
+        el.addEventListener('mouseleave', () => {
+          if (tooltipRef.current) tooltipRef.current.style.display = 'none';
+          if (tooltipIntervalRef.current) clearInterval(tooltipIntervalRef.current);
+        });
+      } else {
+        // Limpiar eventos si cambia de estado
+        el.onmouseenter = null;
+        el.onmousemove = null;
+        el.onmouseleave = null;
+      }
     })
 
     // diagnostics for developer (always log for easier debugging)
     console.log(`SeatMap: svgUrl=${svgUrl} seats total=${seats.length}, found=${found.length}, missing=${missing.length}`)
     if (missing.length) console.log('SeatMap: missing ids sample:', missing.slice(0, 10))
-  }, [seats, onSelect, mode, selectedSeats, svgContent, svgPrefix, svgUrl]);
+  }, [seats, onSelect, mode, selectedSeats, fetchedSvg, svgPrefix, svgUrl]);
+
+  if (!svgUrl) {
+    return <NoMapPlaceholder />;
+  }
+
+  if (isLoading) {
+    return <Loader />;
+  }
+
+  if (error) {
+    return <ErrorDisplay message={error} />;
+  }
 
   return (
     <div
       ref={containerRef}
-      dangerouslySetInnerHTML={{
-        __html: svgContent,
-      }}
-    />
+      style={{ position: 'relative' }} // Necesario para posicionamiento relativo si usáramos absolute
+    >
+      <div dangerouslySetInnerHTML={{ __html: fetchedSvg }} />
+      
+      {/* Tooltip persistente controlado por Refs (Sin Re-renders) */}
+      <div 
+        ref={tooltipRef}
+        style={{
+          display: 'none',
+          position: 'fixed',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          color: 'white',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          pointerEvents: 'none',
+          zIndex: 1000,
+          whiteSpace: 'nowrap'
+        }}
+      />
+    </div>
   );
 }

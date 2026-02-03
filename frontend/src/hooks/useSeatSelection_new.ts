@@ -4,7 +4,7 @@ import { getSeats, reserveSeat, releaseSeat, getMockSeats } from '@/services/sea
 
 export type Mode = 'client' | 'admin'
 
-export function useSeatSelection() {
+export function useSeatSelection(map?: string) {
   const [seats, setSeats] = useState<Seat[]>([])
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<Mode>('client')
@@ -12,7 +12,7 @@ export function useSeatSelection() {
   useEffect(() => {
     const fetchSeats = async () => {
       try {
-        const data = await getSeats()
+        const data = await getSeats(map)
         setSeats(data)
       } catch (error) {
         console.error('Failed to fetch seats, using mocks:', error)
@@ -22,7 +22,7 @@ export function useSeatSelection() {
       }
     }
     fetchSeats()
-  }, [])
+  }, [map])
 
   const selectSeat = (seatId: string) => {
     if (mode === 'client') {
@@ -38,7 +38,7 @@ export function useSeatSelection() {
       // En admin: liberar si reserved
       const seat = seats.find(s => s.id === seatId)
       if (seat?.status === 'reserved') {
-        releaseSeat(seatId).then(updatedSeat => {
+        releaseSeat(map, seatId).then(updatedSeat => {
           setSeats(prev => prev.map(s => s.id === seatId ? updatedSeat : s))
         }).catch(error => {
           console.error('Failed to release seat:', error)
@@ -52,7 +52,7 @@ export function useSeatSelection() {
     const selectedSeats = seats.filter(s => s.status === 'selected')
     for (const seat of selectedSeats) {
       try {
-        const updatedSeat = await reserveSeat(seat.id)
+        const updatedSeat = await reserveSeat(map, seat.id)
         setSeats(prev => prev.map(s => s.id === seat.id ? updatedSeat : s))
       } catch (error) {
         console.error('Failed to reserve seat:', seat.id, error)

@@ -1,12 +1,45 @@
 import { FastifyInstance } from 'fastify'
 import { supabase } from '../supabase'
+import { uploadSVG as gcsUpload, getSVG as gcsGet, listSVGs as gcsList, deleteSVG as gcsDelete } from '../gcs'
 
 export default async function svgRoutes(fastify: FastifyInstance) {
-  // Subir SVG a Supabase storage
+  // Subir SVG a Supabase storage (o a GCS si USE_GCS=true)
   fastify.post('/svg/upload', async (request, reply) => {
     const { fileName, svgContent } = request.body as { fileName: string, svgContent: string }
     console.log('Uploading:', fileName)
     try {
+      if (process.env.USE_GCS === 'true') {
+        const publicUrl = await gcsUpload(fileName, svgContent)
+        console.log('GCS public URL:', publicUrl)
+
+        // Seed seats from svgContent as before
+        try {
+          const idRegex = /\sid=["']?([a-zA-Z0-9_\-]+)["']?/g
+          const ids: string[] = []
+          let m: RegExpExecArray | null
+          while ((m = idRegex.exec(svgContent)) !== null) {
+            if (m[1]) ids.push(m[1])
+          }
+          const dataSeatRegex = /data-seat=["']?([a-zA-Z0-9_\-]+)["']?/g
+          while ((m = dataSeatRegex.exec(svgContent)) !== null) {
+            if (m[1]) ids.push(m[1])
+          }
+          const uniq = Array.from(new Set(ids))
+          const seatsToInsert = uniq.map(extId => ({ id: `${fileName}::${extId}`, externalId: extId, map: fileName, status: 'available' }))
+          if (seatsToInsert.length > 0) {
+            const Seat = require('../models/Seat').default
+            await Seat.deleteMany({ map: fileName })
+            await Seat.insertMany(seatsToInsert)
+            console.log(`Seeded ${seatsToInsert.length} seats for map ${fileName}`)
+          }
+        } catch (err) {
+          console.warn('SVG upload: failed to auto-create seats:', err)
+        }
+
+        return { url: publicUrl, fileName }
+      }
+
+      // Supabase path
       // Supabase storage in Node expects a Buffer or stream for upload
       const buffer = Buffer.from(svgContent, 'utf-8')
       const { data, error } = await supabase.storage
@@ -61,9 +94,13 @@ export default async function svgRoutes(fastify: FastifyInstance) {
     }
   })
 
-  // Listar SVGs en Supabase storage
+  // Listar SVGs
   fastify.get('/svg/list', async (request, reply) => {
     try {
+      if (process.env.USE_GCS === 'true') {
+        const files = await gcsList()
+        return files
+      }
       const { data, error } = await supabase.storage
         .from('svgs')
         .list()
@@ -83,6 +120,10 @@ export default async function svgRoutes(fastify: FastifyInstance) {
   // Debug route to check Supabase connection and bucket
   fastify.get('/svg/debug', async (request, reply) => {
     try {
+      if (process.env.USE_GCS === 'true') {
+        const files = await gcsList()
+        return { bucket: process.env.GCS_BUCKET_NAME || 'seat-svgs', count: files.length, files: files.map(f => f.name) }
+      }
       const { data, error } = await supabase.storage.from('svgs').list()
       if (error) {
         const details = typeof error === 'object' ? JSON.stringify(error) : String(error)
@@ -101,6 +142,11 @@ export default async function svgRoutes(fastify: FastifyInstance) {
   fastify.get('/svg/file/:fileName', async (request, reply) => {
     const { fileName } = request.params as { fileName: string }
     try {
+      if (process.env.USE_GCS === 'true') {
+        const content = await gcsGet(fileName)
+        reply.type('image/svg+xml').send(content)
+        return
+      }
       const { data, error } = await supabase.storage
         .from('svgs')
         .download(fileName)
@@ -121,6 +167,10 @@ export default async function svgRoutes(fastify: FastifyInstance) {
     const { fileName } = request.params as { fileName: string }
     try {
       console.log('Delete request for', fileName)
+      if (process.env.USE_GCS === 'true') {
+        const res = await gcsDelete(fileName)
+        return res
+      }
       const { data, error } = await supabase.storage.from('svgs').remove([fileName])
       if (error) {
         const details = typeof error === 'object' ? JSON.stringify(error) : String(error)
