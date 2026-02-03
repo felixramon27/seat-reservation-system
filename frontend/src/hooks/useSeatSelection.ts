@@ -158,9 +158,10 @@ export function useSeatSelection(map?: string) {
         setSeats(prev => prev.map(seat => seat.id === seatId ? { ...seat, status: updatedSeat.status, expiresAt: undefined } : seat))
         toast.success(`¡Compra confirmada para el asiento ${seatId}!`)
         confirmedIds.push(seatId)
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error confirmando:', error)
-        toast.error(error.message || `Error al confirmar ${seatId}`)
+        const message = error instanceof Error ? error.message : `Error al confirmar ${seatId}`
+        toast.error(message)
       }
     }
     // Solo quitamos de la lista de espera las sillas que se confirmaron exitosamente
