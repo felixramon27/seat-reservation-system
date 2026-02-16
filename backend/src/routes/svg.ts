@@ -6,6 +6,11 @@ import {
   listSVGs as gcsList,
   deleteSVG as gcsDelete,
 } from "../gcs";
+import { parseSvg } from "../services/svgParser";
+import { validateAndSanitizeSvg } from "../services/svgValidator";
+import SeatMap from "../models/SeatMap";
+import Zone from "../models/Zone";
+import mongoose from "mongoose";
 
 export default async function svgRoutes(fastify: FastifyInstance) {
   // Subir SVG a Supabase storage (o a GCS si USE_GCS=true)
@@ -235,6 +240,222 @@ export default async function svgRoutes(fastify: FastifyInstance) {
       const details =
         err && typeof err === "object" ? JSON.stringify(err) : String(err);
       reply.code(500).send({ error: "Error removing SVG", details });
+    }
+  });
+
+  // Analizar SVG — devuelve reporte sin guardar datos
+  fastify.post("/svg/analyze", async (request, reply) => {
+    const { svgContent, fileName } = request.body as {
+      svgContent: string;
+      fileName?: string;
+    };
+
+    if (!svgContent) {
+      return reply.code(400).send({ error: "svgContent is required" });
+    }
+
+    try {
+      const report = parseSvg(svgContent);
+      return {
+        fileName: fileName || null,
+        ...report,
+      };
+    } catch (error) {
+      console.error("Error analyzing SVG:", error);
+      const details =
+        error && typeof error === "object"
+          ? JSON.stringify(error)
+          : String(error);
+      reply.code(500).send({ error: "Error analyzing SVG", details });
+    }
+  });
+
+  // Subir SVG con metadatos — valida, sanitiza, sube a GCS, crea SeatMap
+  fastify.post("/svg/upload-with-info", async (request, reply) => {
+    const {
+      fileName,
+      svgContent,
+      displayName,
+      venue,
+      level,
+      levelOrder,
+      description,
+    } = request.body as {
+      fileName: string;
+      svgContent: string;
+      displayName: string;
+      venue: string;
+      level: string;
+      levelOrder?: number;
+      description?: string;
+    };
+
+    if (!fileName || !svgContent || !displayName || !venue || !level) {
+      return reply.code(400).send({
+        error: "Required: fileName, svgContent, displayName, venue, level",
+      });
+    }
+
+    try {
+      // 1. Validate & sanitize
+      const validation = validateAndSanitizeSvg(svgContent);
+      if (!validation.valid) {
+        return reply.code(400).send({
+          error: "SVG inválido",
+          details: validation.errors,
+        });
+      }
+
+      const cleanSvg = validation.sanitized!;
+
+      // 2. Analyze
+      const report = parseSvg(cleanSvg);
+
+      // 3. Upload to GCS
+      let storageUrl = "";
+      if (process.env.USE_GCS === "true") {
+        storageUrl = await gcsUpload(fileName, cleanSvg);
+      } else {
+        const buffer = Buffer.from(cleanSvg, "utf-8");
+        const { error } = await supabase.storage
+          .from("svgs")
+          .upload(fileName, buffer, {
+            contentType: "image/svg+xml",
+            upsert: true,
+            cacheControl: "0",
+          });
+        if (error) throw error;
+        const urlRes = supabase.storage.from("svgs").getPublicUrl(fileName);
+        storageUrl = urlRes.data?.publicUrl || "";
+      }
+
+      // 4. Upsert SeatMap document
+      const seatMapDoc = await SeatMap.findOneAndUpdate(
+        { fileName },
+        {
+          fileName,
+          displayName,
+          venue,
+          level,
+          levelOrder: levelOrder ?? 0,
+          description: description || "",
+          dimensions: {
+            width: validation.dimensions?.width ?? null,
+            height: validation.dimensions?.height ?? null,
+          },
+          viewBox: validation.dimensions?.viewBox || undefined,
+          totalSeats: report.totalSeats,
+          zones: report.zones.map((z) => z.zoneName),
+          storageUrl,
+          status: "draft",
+        },
+        { upsert: true, new: true },
+      );
+
+      return {
+        seatMap: seatMapDoc,
+        analysis: {
+          totalSeats: report.totalSeats,
+          zones: report.zones,
+          warnings: report.warnings,
+        },
+        storageUrl,
+      };
+    } catch (error) {
+      console.error("Error in upload-with-info:", error);
+      const details =
+        error && typeof error === "object"
+          ? JSON.stringify(error)
+          : String(error);
+      reply.code(500).send({ error: "Error processing SVG", details });
+    }
+  });
+
+  // Registrar seats y zones enriquecidos en MongoDB (transaccional)
+  fastify.post("/svg/register", async (request, reply) => {
+    const { fileName, svgContent } = request.body as {
+      fileName: string;
+      svgContent: string;
+    };
+
+    if (!fileName || !svgContent) {
+      return reply.code(400).send({
+        error: "Required: fileName, svgContent",
+      });
+    }
+
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+
+      // 1. Parse SVG
+      const report = parseSvg(svgContent);
+
+      // 2. Remove old data for this map
+      const Seat = require("../models/Seat").default;
+      await Seat.deleteMany({ map: fileName }, { session });
+      await Zone.deleteMany({ mapFileName: fileName }, { session });
+
+      // 3. Create zones
+      const zoneDocs = report.zones.map((z) => ({
+        mapFileName: fileName,
+        zoneName: z.zoneName,
+        zoneId: z.zoneId,
+        totalSeats: z.seatCount,
+        seatIds: z.seatIds,
+      }));
+      if (zoneDocs.length > 0) {
+        await Zone.insertMany(zoneDocs, { session });
+      }
+
+      // 4. Create enriched seats
+      const seatDocs = report.seats.map((s) => ({
+        id: `${fileName}::${s.seatId}`,
+        externalId: s.seatId,
+        map: fileName,
+        status: "available",
+        zone: s.zone || undefined,
+        seatType: s.dataSeat ? "labeled" : "standard",
+        position: s.position,
+        tagName: s.tagName,
+      }));
+      if (seatDocs.length > 0) {
+        await Seat.insertMany(seatDocs, { session });
+      }
+
+      // 5. Update SeatMap if it exists
+      await SeatMap.findOneAndUpdate(
+        { fileName },
+        {
+          totalSeats: report.totalSeats,
+          zones: report.zones.map((z) => z.zoneName),
+          status: "active",
+        },
+        { session },
+      );
+
+      await session.commitTransaction();
+
+      return {
+        registered: true,
+        totalSeats: report.totalSeats,
+        totalZones: report.zones.length,
+        zones: report.zones.map((z) => ({
+          zoneName: z.zoneName,
+          seatCount: z.seatCount,
+        })),
+        warnings: report.warnings,
+      };
+    } catch (error) {
+      await session.abortTransaction();
+      console.error("Error in register:", error);
+      const details =
+        error && typeof error === "object"
+          ? JSON.stringify(error)
+          : String(error);
+      reply.code(500).send({ error: "Error registering seats", details });
+    } finally {
+      session.endSession();
     }
   });
 }
