@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 
+const getApiBase = () => {
+  if (typeof window === "undefined") return "http://localhost:3002";
+  return `http://${window.location.hostname}:3002`;
+};
+
 type Zone = {
   zoneId: string;
   zoneName: string;
@@ -59,7 +64,7 @@ export default function SvgAnalysisPanel({ svgUrl }: Props) {
       const svgContent = await svgRes.text();
 
       // Call analyze endpoint
-      const res = await fetch("http://localhost:3002/svg/analyze", {
+      const res = await fetch(`${getApiBase()}/svg/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ svgContent, fileName }),
@@ -87,7 +92,7 @@ export default function SvgAnalysisPanel({ svgUrl }: Props) {
       const svgRes = await fetch(fetchUrl, { cache: "no-store" });
       const svgContent = await svgRes.text();
 
-      const res = await fetch("http://localhost:3002/svg/register", {
+      const res = await fetch(`${getApiBase()}/svg/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ svgContent, fileName }),

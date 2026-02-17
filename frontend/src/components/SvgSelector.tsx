@@ -2,6 +2,11 @@
 
 import { useState, useEffect } from "react";
 
+const getApiBase = () => {
+  if (typeof window === "undefined") return "http://localhost:3002";
+  return `http://${window.location.hostname}:3002`;
+};
+
 type SvgFile = {
   name: string;
   url: string;
@@ -31,7 +36,7 @@ export default function SvgSelector({
 
   const fetchSvgs = async () => {
     try {
-      const response = await fetch("http://localhost:3002/svg/list");
+      const response = await fetch(`${getApiBase()}/svg/list`);
       if (response.ok) {
         const data = await response.json();
         setSvgs(data);
@@ -47,7 +52,7 @@ export default function SvgSelector({
     setErrorMsg(null);
     try {
       const svgContent = await file.text();
-      const response = await fetch("http://localhost:3002/svg/upload", {
+      const response = await fetch(`${getApiBase()}/svg/upload`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -92,7 +97,7 @@ export default function SvgSelector({
     setDeleting(true);
     try {
       const res = await fetch(
-        `http://localhost:3002/svg/${encodeURIComponent(deleteTarget)}`,
+        `${getApiBase()}/svg/${encodeURIComponent(deleteTarget)}`,
         {
           method: "DELETE",
         },

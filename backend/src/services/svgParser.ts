@@ -5,8 +5,9 @@ import { DOMParser } from "@xmldom/xmldom";
 export interface ParsedSeat {
   seatId: string; // e.g. "seat-VIP1", "seat-A3"
   tagName: string; // e.g. "circle", "rect", "g"
-  zone: string | null; // zone name from nearest ancestor <g>
-  position: { x: number; y: number };
+  zone: string | null; // zone id from nearest ancestor <g>
+  zoneName: string | null; // display name (from <text> label or cleaned id)
+  position: { x: number; y: number } | null;
   dataSeat?: string; // data-seat attribute value, if present
 }
 
@@ -49,23 +50,41 @@ function isElement(node: Node): node is Element {
 const SHAPE_TAGS = new Set(["circle", "rect", "ellipse", "path", "polygon"]);
 
 /**
- * Walk up the DOM to find the nearest ancestor <g> that has an id
- * which does NOT start with "seat-" (those are seat groups, not zones).
+ * Walk up the DOM to find the best ancestor <g> for the zone.
+ * Prefers the outermost <g> with an ID that is NOT a seat group.
+ * This correctly identifies 'zonaA' over 'mesasA'.
  */
 function findZoneAncestor(
   el: Element,
 ): { zoneId: string; zoneName: string } | null {
+  let best: { zoneId: string; zoneName: string } | null = null;
   let current: Node | null = el.parentNode;
   while (current) {
     if (isElement(current) && current.tagName === "g") {
       const gId = current.getAttribute("id");
       if (gId && !gId.startsWith("seat-")) {
-        return { zoneId: gId, zoneName: cleanZoneName(gId) };
+        // Try to find a <text> label inside this group for a nicer display name
+        let label: string | null = null;
+        const children = current.childNodes;
+        for (let i = 0; i < children.length; i++) {
+          const child = children[i];
+          if (isElement(child) && child.tagName === "text") {
+            const text = (child.textContent || "").trim();
+            if (text) {
+              label = text;
+              break;
+            }
+          }
+        }
+        best = {
+          zoneId: gId,
+          zoneName: label || cleanZoneName(gId),
+        };
       }
     }
     current = current.parentNode;
   }
-  return null;
+  return best;
 }
 
 /** Normalize a zone id to a friendlier name */
@@ -81,22 +100,33 @@ function cleanZoneName(raw: string): string {
  * Extract x/y position from an element.
  * Supports: circle(cx,cy) · rect(x,y) · ellipse(cx,cy)
  * For <g> and <path> it tries to read the first child shape inside.
+ * Returns null if no position data could be found.
  */
-function extractPosition(el: Element): { x: number; y: number } {
+function extractPosition(el: Element): { x: number; y: number } | null {
   const tag = el.tagName;
 
   if (tag === "circle" || tag === "ellipse") {
-    return {
-      x: parseFloat(el.getAttribute("cx") || "0"),
-      y: parseFloat(el.getAttribute("cy") || "0"),
-    };
+    const cx = el.getAttribute("cx");
+    const cy = el.getAttribute("cy");
+    if (cx !== null || cy !== null) {
+      return {
+        x: parseFloat(cx || "0"),
+        y: parseFloat(cy || "0"),
+      };
+    }
+    return null;
   }
 
   if (tag === "rect") {
-    return {
-      x: parseFloat(el.getAttribute("x") || "0"),
-      y: parseFloat(el.getAttribute("y") || "0"),
-    };
+    const rx = el.getAttribute("x");
+    const ry = el.getAttribute("y");
+    if (rx !== null || ry !== null) {
+      return {
+        x: parseFloat(rx || "0"),
+        y: parseFloat(ry || "0"),
+      };
+    }
+    return null;
   }
 
   // For <g> or <path>/<polygon> without explicit coords,
@@ -119,7 +149,7 @@ function extractPosition(el: Element): { x: number; y: number } {
     }
   }
 
-  return { x: 0, y: 0 };
+  return null;
 }
 
 // ────────── Main parser ──────────
@@ -178,6 +208,7 @@ export function parseSvg(svgContent: string): SvgAnalysisReport {
       seatId: id,
       tagName: el.tagName,
       zone: zoneInfo ? zoneInfo.zoneId : null,
+      zoneName: zoneInfo ? zoneInfo.zoneName : null,
       position,
       dataSeat: el.getAttribute("data-seat") || undefined,
     };
@@ -194,7 +225,7 @@ export function parseSvg(svgContent: string): SvgAnalysisReport {
     if (!zoneAccum.has(seat.zone)) {
       zoneAccum.set(seat.zone, {
         zoneId: seat.zone,
-        zoneName: cleanZoneName(seat.zone),
+        zoneName: seat.zoneName || cleanZoneName(seat.zone),
         seatCount: 0,
         seatIds: [],
       });
@@ -217,7 +248,7 @@ export function parseSvg(svgContent: string): SvgAnalysisReport {
 
   // 5. Seats without meaningful position
   for (const seat of seats) {
-    if (seat.position.x === 0 && seat.position.y === 0) {
+    if (seat.position === null) {
       warnings.push({
         type: "seat_no_position",
         message: `No se pudo determinar posición para: ${seat.seatId}`,
