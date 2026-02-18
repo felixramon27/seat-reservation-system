@@ -53,16 +53,49 @@ export function useSeatSelection(map?: string) {
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout;
+    let heartbeatInterval: NodeJS.Timeout;
     let isMounted = true;
+
+    // Refetch seats (used on reconnect to catch any missed updates)
+    const refetchSeats = async () => {
+      try {
+        type BackendSeat = {
+          id: string;
+          externalId?: string;
+          status: Seat["status"];
+          expiresAt?: string;
+        };
+        const data = (await getSeats(map)) as BackendSeat[];
+        const transformed = data.map((s) => ({
+          id: s.externalId || s.id,
+          status: s.status,
+          expiresAt: s.expiresAt,
+        }));
+        if (isMounted) setSeats(transformed);
+      } catch (err) {
+        console.warn("Error refetching seats on reconnect:", err);
+      }
+    };
 
     const connect = () => {
       const wsHost =
         typeof window !== "undefined" ? window.location.hostname : "localhost";
       const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `ws://${wsHost}:5001`;
+      console.log("🔄 Intentando conectar WebSocket a:", wsUrl);
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         console.log("🟢 Conectado al servicio de tiempo real de sillas");
+        // Refetch seats to catch any updates missed while disconnected
+        refetchSeats();
+        // Heartbeat: send ping every 25s to keep connection alive
+        // Mobile browsers and routers kill idle WebSocket connections
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "PING" }));
+          }
+        }, 25000);
       };
 
       ws.onmessage = (event) => {
@@ -71,15 +104,12 @@ export function useSeatSelection(map?: string) {
 
           if (data.type === "SEAT_UPDATE" && data.seat) {
             const updatedSeat = data.seat;
-            console.log("📩 WebSocket Update recibido:", updatedSeat); // Log para ver qué llega exactamente
+            console.log("📩 WebSocket Update recibido:", updatedSeat);
 
             setSeats((prevSeats) => {
-              // Si el asiento actualizado pertenece a otro mapa (si existe esa propiedad), lo ignoramos
               if (map && updatedSeat.map && updatedSeat.map !== map)
                 return prevSeats;
 
-              // Intentamos obtener el ID correcto buscando en varias propiedades comunes (_id, id, seatId)
-              // Priorizamos externalId porque es el ID que usa el frontend (ej: "seat-A8")
               const targetId =
                 updatedSeat.externalId ||
                 updatedSeat.seatId ||
@@ -105,7 +135,12 @@ export function useSeatSelection(map?: string) {
         }
       };
 
+      ws.onerror = (err) => {
+        console.error("🔴 Error en WebSocket:", err);
+      };
+
       ws.onclose = () => {
+        clearInterval(heartbeatInterval);
         if (isMounted) {
           console.log(
             "🔴 Desconectado. Intentando reconectar en 3 segundos...",
@@ -120,6 +155,7 @@ export function useSeatSelection(map?: string) {
     return () => {
       isMounted = false;
       clearTimeout(reconnectTimeout);
+      clearInterval(heartbeatInterval);
       if (ws) {
         ws.close();
       }
